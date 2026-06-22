@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 // Change this password to whatever you want your trainers to use
 const APP_PASSWORD = "trainer2024";
-
+const API_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
 const emptyLO = {
   loName: "", yearsInIndustry: "", encompassExperience: "No",
   attendance: "", notableStrengths: "", notableWeaknesses: "",
@@ -101,8 +101,7 @@ function PasswordScreen({ onUnlock }) {
 
   const handleSubmit = () => {
     if (pw !== APP_PASSWORD) { setError("Incorrect password."); return; }
-    if (!apiKey.trim().startsWith("sk-")) { setError("Please enter a valid Anthropic API key (starts with sk-)."); return; }
-    onUnlock(apiKey.trim());
+   onUnlock();
   };
 
   return (
@@ -157,9 +156,9 @@ function PasswordScreen({ onUnlock }) {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [apiKey, setApiKey] = useState(null);
-  if (!apiKey) return <PasswordScreen onUnlock={setApiKey} />;
-  return <TrainingReviewTemplate apiKey={apiKey} />;
+  const [unlocked, setUnlocked] = useState(false);
+  if (!unlocked) return <PasswordScreen onUnlock={() => setUnlocked(true)} />;
+  return <TrainingReviewTemplate apiKey={API_KEY} />;
 }
 
 function TrainingReviewTemplate({ apiKey }) {
