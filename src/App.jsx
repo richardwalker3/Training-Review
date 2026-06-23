@@ -186,7 +186,7 @@ function TrainingReviewTemplate({ apiKey }) {
   "anthropic-version": "2023-06-01",
   "anthropic-dangerous-direct-browser-access": "true"
 },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4000, messages }),
     });
     const result = await response.json();
     if (result.error) throw new Error(result.error.message);
