@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 // Change this password to whatever you want your trainers to use
 const APP_PASSWORD = "trainer2024";
 const API_KEY = import.meta.env.VITE_ANTHROPIC_KEY;
+
 const emptyLO = {
   loName: "", yearsInIndustry: "", encompassExperience: "No",
   attendance: "", notableStrengths: "", notableWeaknesses: "",
@@ -13,23 +14,41 @@ const emptyLO = {
 };
 
 const MULTI_LO_PROMPT = `
-These are training grades/survey files for a group of Loan Officers (LOs). There may be multiple files combined — merge data by LO name.
+These are training grades/survey files for a group of Loan Officers (LOs). There may be multiple files combined — merge all data by LO name.
 
-Extract EVERY LO found. For each LO return a block using EXACTLY this XML format:
+FILE TYPES YOU WILL SEE:
+1. A SURVEY SPREADSHEET with columns like: Name, Email, "How long have you", "Do you have experience", unique facts, etc.
+   - The "Name" column contains the LO full name
+   - "How long have you" = years in industry
+   - "Do you have experience" = Encompass experience (Yes/No)
+   - Look for a fun or unique personal fact in any column
+
+2. TEST ANALYSIS REPORTS — PDFs or printed pages with a header like "CD | New Hire Training | Week 1 | [Quiz Name]"
+   - Names are in "Last, First" format — convert to "First Last" when outputting
+   - Scores are in the "Score" column as numbers (e.g. 89, 100) — output as percentages (e.g. 89%, 100%)
+   - Multiple rows for the same person = multiple attempts — include ALL attempts comma separated
+   - Map quiz titles to fields as follows:
+     * "Day 2 Quiz" = nafDetailsQuiz
+     * "Day 3 Quiz" OR any quiz with "NAF Link" in the title = nafLinkQuiz  
+     * "Day 4 Quiz" OR any quiz with "Encompass" in the title = encompassQuiz
+     * "Exit Exam" OR "Final Exam" = finalExam
+   - Attendance is not in test reports — leave blank unless found in survey
+
+Extract EVERY LO found across all files. For each LO return a block using EXACTLY this XML format:
 
 <lo>
-<loName>full name</loName>
+<loName>First Last (converted from Last, First if needed)</loName>
 <yearsInIndustry>e.g. 1.5 yrs</yearsInIndustry>
 <encompassExperience>Yes or No</encompassExperience>
-<attendance>e.g. 100%</attendance>
+<attendance>e.g. 100% or blank</attendance>
 <uniqueFact>fun fact or leave blank</uniqueFact>
-<nafDetailsQuiz>list EVERY attempt score, comma separated e.g. 60%, 90%</nafDetailsQuiz>
-<nafLinkQuiz>list EVERY attempt score, comma separated or blank</nafLinkQuiz>
-<encompassQuiz>list EVERY attempt score, comma separated or blank</encompassQuiz>
-<finalExam>list EVERY attempt score, comma separated or blank</finalExam>
+<nafDetailsQuiz>ALL attempt scores comma separated e.g. 89%, 100%</nafDetailsQuiz>
+<nafLinkQuiz>ALL attempt scores comma separated or blank</nafLinkQuiz>
+<encompassQuiz>ALL attempt scores comma separated or blank</encompassQuiz>
+<finalExam>ALL attempt scores comma separated or blank</finalExam>
 </lo>
 
-IMPORTANT: For quiz/exam scores, include ALL attempts in order — do not only show the highest or most recent. Separate each attempt with a comma.
+IMPORTANT: Include ALL attempts for every quiz in order. Never show only the highest or most recent.
 Output ONE <lo>...</lo> block per LO. Use blank (empty) tags for missing fields.
 Output ONLY the <lo> blocks, nothing else.`;
 
@@ -94,27 +113,25 @@ async function fileToTextChunk(file) {
 // ── Password Screen ───────────────────────────────────────────────────────────
 function PasswordScreen({ onUnlock }) {
   const [pw, setPw] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [showKey, setShowKey] = useState(false);
 
   const handleSubmit = () => {
     if (pw !== APP_PASSWORD) { setError("Incorrect password."); return; }
-   onUnlock();
+    onUnlock();
   };
 
   return (
     <div style={{ minHeight:"100vh", background:"#f0f4fa", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Calibri, Arial, sans-serif" }}>
-      <div style={{ background:"#fff", borderRadius:12, padding:36, width:380, boxShadow:"0 4px 24px rgba(0,0,0,0.10)" }}>
+      <div style={{ background:"#fff", borderRadius:12, padding:36, width:360, boxShadow:"0 4px 24px rgba(0,0,0,0.10)" }}>
         <div style={{ textAlign:"center", marginBottom:24 }}>
           <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
           <h1 style={{ fontSize:20, fontWeight:700, color:"#1e3a5f", margin:0 }}>Training Review Tool</h1>
-          <p style={{ fontSize:13, color:"#666", marginTop:6 }}>Enter the team password and your API key to continue.</p>
+          <p style={{ fontSize:13, color:"#666", marginTop:6 }}>Enter the team password to continue.</p>
         </div>
 
         <label style={labelStyle}>Team Password</label>
-        <div style={{ position:"relative", marginBottom:14 }}>
+        <div style={{ position:"relative", marginBottom:20 }}>
           <input
             type={showPw ? "text" : "password"}
             placeholder="Enter password"
@@ -124,22 +141,6 @@ function PasswordScreen({ onUnlock }) {
           />
           <span onClick={() => setShowPw(v=>!v)} style={eyeStyle}>{showPw ? "🙈" : "👁️"}</span>
         </div>
-
-        <label style={labelStyle}>Anthropic API Key</label>
-        <div style={{ position:"relative", marginBottom:6 }}>
-          <input
-            type={showKey ? "text" : "password"}
-            placeholder="sk-ant-..."
-            value={apiKey} onChange={e => { setApiKey(e.target.value); setError(""); }}
-            onKeyDown={e => e.key === "Enter" && handleSubmit()}
-            style={{ ...inputStyle, paddingRight:38 }}
-          />
-          <span onClick={() => setShowKey(v=>!v)} style={eyeStyle}>{showKey ? "🙈" : "👁️"}</span>
-        </div>
-        <p style={{ fontSize:11, color:"#888", marginBottom:16 }}>
-          Your key is used only in your browser session and never stored.
-          Get one at <a href="https://console.anthropic.com" target="_blank" rel="noreferrer" style={{ color:"#4472c4" }}>console.anthropic.com</a>
-        </p>
 
         {error && <div style={{ fontSize:12, color:"#dc2626", marginBottom:10, fontWeight:600 }}>⚠️ {error}</div>}
 
@@ -180,12 +181,7 @@ function TrainingReviewTemplate({ apiKey }) {
   const callClaude = async (messages) => {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers:{ 
-  "Content-Type": "application/json", 
-  "x-api-key": apiKey, 
-  "anthropic-version": "2023-06-01",
-  "anthropic-dangerous-direct-browser-access": "true"
-},
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4000, messages }),
     });
     const result = await response.json();
